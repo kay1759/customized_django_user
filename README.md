@@ -32,6 +32,9 @@ when you would like to change &lt;project name&gt;
 
 
 ## Commit Tags:
+### fullname:
+* use full_name instead of first_name and last_name
+
 ### uuid:
 * use UUID for Primary Key instead of auto increment integer
 
