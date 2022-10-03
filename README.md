@@ -32,6 +32,9 @@ when you would like to change &lt;project name&gt;
 
 
 ## Commit Tags:
+### email_login:
+* delete username field and use email for login account ('uuid' is also applied)
+
 ### no_email:
 * delete email field ('uuid' is also applied)
 

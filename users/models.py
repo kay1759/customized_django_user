@@ -9,7 +9,7 @@ from django.db.models.manager import EmptyManager
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.core.validators import EmailValidator
 
 from django.contrib.auth.models import PermissionsMixin
 import uuid as uuid_lib
@@ -17,30 +17,27 @@ import uuid as uuid_lib
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
-    def _create_user(self, username, password, **extra_fields):
+    def _create_user(self, email, password, **extra_fields):
         """
         Create and save a user with the given username, email, and password.
         """
-        if not username:
-            raise ValueError("The given username must be set")
+        if not email:
+            raise ValueError("The given email must be set")
+        email = self.normalize_email(email)
         # Lookup the real model class from the global app registry so this
         # manager method can be used in migrations. This is fine because
         # managers are by definition working on the real model.
-        GlobalUserModel = apps.get_model(
-            self.model._meta.app_label, self.model._meta.object_name
-        )
-        username = GlobalUserModel.normalize_username(username)
-        user = self.model(username=username, **extra_fields)
+        user = self.model(email=email, **extra_fields)
         user.password = make_password(password)
         user.save(using=self._db)
         return user
 
-    def create_user(self, username, password=None, **extra_fields):
+    def create_user(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
-        return self._create_user(username, password, **extra_fields)
+        return self._create_user(email, password, **extra_fields)
 
-    def create_superuser(self, username, password=None, **extra_fields):
+    def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
@@ -49,7 +46,7 @@ class UserManager(BaseUserManager):
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
 
-        return self._create_user(username, password, **extra_fields)
+        return self._create_user(email, password, **extra_fields)
 
     def with_perm(
         self, perm, is_active=True, include_superusers=True, backend=None, obj=None
@@ -83,7 +80,6 @@ class AbstractUser(AbstractBaseUser, PermissionsMixin):
     """
     An abstract base class implementing a fully featured User model with
     admin-compliant permissions.
-
     Username and password are required. Other fields are optional.
     """
 
@@ -92,18 +88,17 @@ class AbstractUser(AbstractBaseUser, PermissionsMixin):
                           editable=False,
                           unique=True)
 
-    username_validator = UnicodeUsernameValidator()
+    email_validator = EmailValidator()
 
-    username = models.CharField(
-        _("username"),
-        max_length=150,
+    email = models.EmailField(
+        _("email address"),
         unique=True,
+        validators=[email_validator],
         help_text=_(
-            "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only."
+            "Must be a valid email address."
         ),
-        validators=[username_validator],
         error_messages={
-            "unique": _("A user with that username already exists."),
+            "unique": _("A user with that email already exists."),
         },
     )
     first_name = models.CharField(_("first name"), max_length=150, blank=True)
@@ -125,8 +120,8 @@ class AbstractUser(AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
-    EMAIL_FIELD = None
-    USERNAME_FIELD = "username"
+    EMAIL_FIELD = "email"
+    USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     class Meta:
@@ -136,6 +131,7 @@ class AbstractUser(AbstractBaseUser, PermissionsMixin):
 
     def clean(self):
         super().clean()
+        self.email = self.__class__.objects.normalize_email(self.email)
 
     def get_full_name(self):
         """
@@ -150,17 +146,15 @@ class AbstractUser(AbstractBaseUser, PermissionsMixin):
 
     def email_user(self, subject, message, from_email=None, **kwargs):
         """Send an email to this user."""
-        pass
+        send_mail(subject, message, from_email, [self.email], **kwargs)
 
 
 class User(AbstractUser):
     """
     Users within the Django authentication system are represented by this
     model.
-
     Username and password are required. Other fields are optional.
     """
 
     class Meta(AbstractUser.Meta):
         swappable = "AUTH_USER_MODEL"
-
